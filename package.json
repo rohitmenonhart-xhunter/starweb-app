@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node api/install-browser-deps.js",
+    "postbuild": "echo 'Build complete, browser dependencies installed'",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "browser-check": "node api/install-browser-deps.js"
   },
   "dependencies": {
     "axios": "^1.6.7",

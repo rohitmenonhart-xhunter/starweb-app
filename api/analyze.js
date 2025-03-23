@@ -1,6 +1,6 @@
 import analyze from '../src/api/analyze.js';
 import dotenv from 'dotenv';
-import { getChromiumBrowser } from './utils/chromium.js';
+import { launchBrowser } from './utils/browser.js';
 
 // Load environment variables
 dotenv.config();
@@ -24,32 +24,50 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid URL format. URL must start with http:// or https://' });
     }
 
-    // Get a new browser instance for each request (more reliable in serverless)
-    browser = await getChromiumBrowser();
+    console.log('Starting analysis for URL:', url);
+    
+    // Get a new browser instance using our fixed browser utility
+    try {
+      console.log('Launching browser...');
+      browser = await launchBrowser();
+      console.log('Browser launched successfully');
+    } catch (browserError) {
+      console.error('Failed to launch browser:', browserError);
+      return res.status(500).json({
+        error: 'Browser launch failed',
+        message: browserError.message,
+        suggestion: 'Please check the browser-check endpoint for detailed diagnostics.'
+      });
+    }
 
     // Pass the browser instance to the analyze function
+    console.log('Running analysis...');
     const analysis = await analyze(url, browser);
     
     // Close the browser after analysis
     if (browser) {
+      console.log('Closing browser...');
       await browser.close();
+      console.log('Browser closed successfully');
     }
     
-    res.status(200).json(analysis);
+    return res.status(200).json(analysis);
   } catch (error) {
     console.error('Analysis error:', error);
     
     // Ensure browser is closed on error
     if (browser) {
       try {
+        console.log('Closing browser after error...');
         await browser.close();
       } catch (closingError) {
         console.error('Error closing browser:', closingError);
       }
     }
     
-    res.status(500).json({ 
-      error: error.message || 'Failed to analyze website'
+    return res.status(500).json({ 
+      error: error.message || 'Failed to analyze website',
+      suggestion: 'Please try the lightweight analysis endpoint or check the browser-check endpoint for diagnostics.'
     });
   }
 } 

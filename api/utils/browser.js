@@ -1,6 +1,10 @@
 import chromium from 'chrome-aws-lambda';
 import puppeteer from 'puppeteer-core';
 import { ensureBrowser } from './install-browser.js';
+import { setupLambdaEnvironment } from './lambda-setup.js';
+
+// Run Lambda setup
+setupLambdaEnvironment();
 
 /**
  * Launches a browser with proper Vercel serverless environment configuration
@@ -18,7 +22,13 @@ export async function launchBrowser() {
   
   // Basic options compatible with Vercel
   const options = {
-    args: chromium.args,
+    args: [
+      ...chromium.args,
+      // Additional args for stability
+      '--disable-dev-shm-usage', 
+      '--disable-features=site-per-process',
+      '--single-process'
+    ],
     defaultViewport: chromium.defaultViewport,
     executablePath: executablePath,
     headless: chromium.headless,
@@ -26,6 +36,7 @@ export async function launchBrowser() {
   };
   
   try {
+    console.log('Launching browser with chrome-aws-lambda options...');
     return await puppeteer.launch(options);
   } catch (error) {
     console.error('Failed to launch browser with chrome-aws-lambda:', error.message);
@@ -53,10 +64,25 @@ export async function launchBrowser() {
     }));
     
     try {
+      console.log('Launching browser with fallback options...');
       return await puppeteer.launch(fallbackOptions);
     } catch (fallbackError) {
       console.error('Fallback browser launch also failed:', fallbackError.message);
-      throw new Error(`Failed to launch browser in Vercel environment. Original error: ${error.message}, Fallback error: ${fallbackError.message}`);
+      
+      // One last attempt with absolute minimal configuration
+      const minimalOptions = {
+        args: ['--no-sandbox', '--single-process'],
+        executablePath: '/tmp/chromium/chrome',
+        headless: true
+      };
+      
+      console.log('Attempting last-resort browser launch...');
+      try {
+        return await puppeteer.launch(minimalOptions);
+      } catch (lastError) {
+        console.error('Last-resort browser launch failed:', lastError.message);
+        throw new Error(`Failed to launch browser in Vercel environment after multiple attempts. Original error: ${error.message}`);
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
 import analyze from '../../src/api/analyze.js';
 import dotenv from 'dotenv';
-import { getChromiumBrowser } from '../utils/chromium.js';
+import { launchBrowser } from '../utils/browser.js';
 
 // Load environment variables
 dotenv.config();
@@ -26,10 +26,19 @@ export default async function handler(req, res) {
 
     console.log(`Analyzing URL: ${url}`);
     
-    // Get a new browser instance for each request (more reliable in serverless)
-    console.log('Launching chromium browser...');
-    browser = await getChromiumBrowser();
-    console.log('Browser launched successfully');
+    // Get a new browser instance using our fixed browser utility
+    try {
+      console.log('Launching browser...');
+      browser = await launchBrowser();
+      console.log('Browser launched successfully');
+    } catch (browserError) {
+      console.error('Failed to launch browser:', browserError);
+      return res.status(500).json({
+        error: 'Browser launch failed',
+        message: browserError.message,
+        suggestion: 'Please check the browser-check endpoint for detailed diagnostics.'
+      });
+    }
 
     // Pass the browser instance to the analyze function
     console.log('Starting analysis...');
@@ -59,7 +68,8 @@ export default async function handler(req, res) {
     }
     
     res.status(500).json({ 
-      error: error.message || 'Failed to analyze website'
+      error: error.message || 'Failed to analyze website',
+      suggestion: 'Please try the lightweight analysis endpoint or check the browser-check endpoint for diagnostics.'
     });
   }
 } 
