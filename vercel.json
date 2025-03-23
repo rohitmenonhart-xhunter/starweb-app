@@ -17,6 +17,7 @@
   "env": {
     "NODE_ENV": "production",
     "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
-    "PUPPETEER_EXECUTABLE_PATH": "/tmp/chromium/chrome"
+    "CHROME_AWS_LAMBDA_CHROMIUM_EXECUTABLE_PATH": "/tmp/chromium/chrome",
+    "CHROME_AWS_LAMBDA_CACHE_DIR": "/tmp"
   }
 } 

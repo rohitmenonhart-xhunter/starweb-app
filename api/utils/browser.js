@@ -1,76 +1,82 @@
+import chromium from 'chrome-aws-lambda';
 import puppeteer from 'puppeteer-core';
+import { ensureBrowser } from './install-browser.js';
 
-// Try to connect to a browser using various strategies
+/**
+ * Launches a browser with proper Vercel serverless environment configuration
+ * @returns {Promise<Browser>} Puppeteer browser instance
+ */
 export async function launchBrowser() {
+  console.log('Launching browser for Vercel environment...');
+  
+  // Try to ensure browser is installed and available
+  await ensureBrowser();
+  
+  const executablePath = await chromium.executablePath;
+  
+  console.log('Using Chrome executable path:', executablePath || 'default');
+  
+  // Basic options compatible with Vercel
   const options = {
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process', // Important for memory usage
-      '--disable-gpu',
-      '--hide-scrollbars'
-    ],
-    headless: true,
-    ignoreHTTPSErrors: true
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: executablePath,
+    headless: chromium.headless,
+    ignoreHTTPSErrors: true,
   };
-
-  console.log('Attempting to launch browser with options:', JSON.stringify({
-    args: options.args.join(', ').substring(0, 100) + '...',
-    headless: options.headless
-  }));
-
+  
   try {
-    // Try to launch without a specific path (attempt to find Chrome)
-    console.log('Trying to launch browser without executable path...');
     return await puppeteer.launch(options);
   } catch (error) {
-    console.error('Failed to launch browser without path:', error.message);
+    console.error('Failed to launch browser with chrome-aws-lambda:', error.message);
     
-    // Try with possible Chrome paths
-    const possiblePaths = [
-      // Linux Chrome
-      '/usr/bin/google-chrome',
-      // Linux Chromium
-      '/usr/bin/chromium-browser',
-      // Vercel serverless Chrome path (might work)
-      '/tmp/chromium/chrome',
-      // Lambda Chrome path
-      '/opt/chrome/chrome'
-    ];
+    // Fallback with explicit options if the first attempt fails
+    const fallbackOptions = {
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ],
+      executablePath: executablePath || '/tmp/chromium/chrome',
+      headless: true,
+      ignoreHTTPSErrors: true
+    };
     
-    // Try each possible path
-    for (const executablePath of possiblePaths) {
-      try {
-        console.log(`Trying to launch browser with path: ${executablePath}`);
-        return await puppeteer.launch({
-          ...options,
-          executablePath
-        });
-      } catch (pathError) {
-        console.error(`Failed with path ${executablePath}:`, pathError.message);
-      }
+    console.log('Trying fallback launch with options:', JSON.stringify({
+      args: fallbackOptions.args.join(', ').substring(0, 100) + '...',
+      executablePath: fallbackOptions.executablePath
+    }));
+    
+    try {
+      return await puppeteer.launch(fallbackOptions);
+    } catch (fallbackError) {
+      console.error('Fallback browser launch also failed:', fallbackError.message);
+      throw new Error(`Failed to launch browser in Vercel environment. Original error: ${error.message}, Fallback error: ${fallbackError.message}`);
     }
-    
-    // If all attempts fail, throw a helpful error
-    throw new Error(`Failed to launch browser with all known strategies. Original error: ${error.message}`);
   }
 }
 
-// Get a configured page from the browser
+/**
+ * Gets a configured page from a browser, optimized for serverless environment
+ * @returns {Promise<{browser: Browser, page: Page}>} Browser and page objects
+ */
 export async function getBrowserPage() {
   try {
+    console.log('Getting browser instance...');
     const browser = await launchBrowser();
+    
+    console.log('Creating new page...');
     const page = await browser.newPage();
     
-    // Set up request interception to block unnecessary resources
+    // Set up request interception to save memory
     await page.setRequestInterception(true);
     
     page.on('request', (request) => {
-      // Block non-critical resources to save memory
       const resourceType = request.resourceType();
       const blockedTypes = ['image', 'media', 'font', 'stylesheet'];
       

@@ -7,4 +7,5 @@ export { default as analyzeUrl } from './analyze-url/index.js';
 export { default as generateSolution } from './generate-solution.js';
 export { default as sendEmail } from './send-email.js';
 export { default as testEmailConfig } from './test-email-config.js';
-export { default as health } from './health.js'; 
+export { default as health } from './health.js';
+export { default as browserCheck } from './browser-check.js'; 
