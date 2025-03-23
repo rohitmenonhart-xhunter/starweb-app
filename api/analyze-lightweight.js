@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { getChromiumPage } from './utils/chromium.js';
+import { getBrowserPage } from './utils/browser.js';
 import { OpenAI } from 'openai';
 
 // Load environment variables
@@ -32,22 +32,41 @@ export default async function handler(req, res) {
 
     console.log(`Analyzing URL (lightweight): ${url}`);
     
-    // Get a new browser and page with memory optimizations
-    const browserSetup = await getChromiumPage();
-    browser = browserSetup.browser;
-    page = browserSetup.page;
-    
-    console.log('Browser launched successfully');
+    try {
+      // Get a new browser and page with memory optimizations
+      console.log('Setting up browser...');
+      const browserSetup = await getBrowserPage();
+      browser = browserSetup.browser;
+      page = browserSetup.page;
+      console.log('Browser launched successfully');
+    } catch (browserError) {
+      console.error('Failed to launch browser:', browserError);
+      return res.status(500).json({
+        error: 'Failed to launch browser',
+        message: browserError.message,
+        suggestion: 'This is likely due to Vercel serverless function limitations. Consider upgrading to Vercel Pro or using the Docker deployment option.'
+      });
+    }
 
     // Set a short timeout to prevent long-running processes
     page.setDefaultNavigationTimeout(30000);
     
     // Navigate to the page
     console.log(`Navigating to ${url}`);
-    await page.goto(url, { 
-      waitUntil: 'domcontentloaded', // Less resource-intensive than 'networkidle0'
-      timeout: 30000
-    });
+    try {
+      await page.goto(url, { 
+        waitUntil: 'domcontentloaded', // Less resource-intensive than 'networkidle0'
+        timeout: 30000
+      });
+    } catch (navigationError) {
+      console.error('Navigation error:', navigationError);
+      await browser.close();
+      return res.status(500).json({
+        error: 'Failed to navigate to URL',
+        message: navigationError.message,
+        suggestion: 'The website may be blocking automated access or taking too long to load.'
+      });
+    }
     
     // Wait a short amount of time for content to load
     await page.waitForTimeout(1000);
@@ -70,6 +89,8 @@ export default async function handler(req, res) {
       };
     });
 
+    console.log('Basic info extracted:', JSON.stringify(basicInfo).substring(0, 100) + '...');
+
     // Take a screenshot with reduced quality to save memory
     console.log('Taking screenshot...');
     const screenshot = await page.screenshot({ 
@@ -79,12 +100,14 @@ export default async function handler(req, res) {
       clip: { x: 0, y: 0, width: 1280, height: 720 } 
     });
     const screenshotBase64 = screenshot.toString('base64');
+    console.log('Screenshot captured, size:', Math.round(screenshotBase64.length / 1024), 'KB');
     
     // Close the page and browser to free memory
     await page.close();
     await browser.close();
     browser = null;
     page = null;
+    console.log('Browser resources released');
     
     console.log('Generating AI analysis...');
     
@@ -108,7 +131,7 @@ export default async function handler(req, res) {
     
     // Generate a summary of issues using OpenAI API
     const issuesResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-3.5-turbo", // Changed from gpt-4o to gpt-3.5-turbo for Vercel Hobby plan
       messages: [
         {
           role: "system", 

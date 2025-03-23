@@ -1,170 +1,129 @@
 # Deploying to Vercel
 
-This document provides detailed instructions for deploying the StarWeb application to Vercel.
+This guide explains how to deploy the StarWeb application to Vercel, addressing common issues and providing best practices.
 
 ## Prerequisites
 
-1. A GitHub account
-2. A Vercel account (free tier works fine)
-3. OpenAI API key
-4. Email account credentials (for sending reports)
+1. A [Vercel account](https://vercel.com/signup)
+2. [Node.js](https://nodejs.org/) installed locally
+3. [Vercel CLI](https://vercel.com/docs/cli) (optional, but recommended for troubleshooting)
+4. An OpenAI API key
 
-## Step 1: Prepare your repository
+## Deployment Steps
 
-If you're starting from this repository:
+### 1. Prepare Your Repository
 
-1. Fork this repository to your GitHub account
-2. Clone your forked repository to your local machine
-3. Make any desired changes
-4. Push the changes to your GitHub repository
-
-## Step 2: Set up Vercel
-
-### Option 1: Deploy from the Vercel Dashboard
-
-1. Sign up for a [Vercel account](https://vercel.com/signup) if you don't already have one
-2. Connect your GitHub account to Vercel
-3. Import your GitHub repository into Vercel
-   - Go to the Vercel dashboard and click "Add New..."
-   - Select "Project"
-   - Select your GitHub repository
-   
-### Option 2: Deploy using the Vercel CLI
-
-1. Install the Vercel CLI:
-   ```bash
-   npm install -g vercel
-   ```
-
-2. Log in to your Vercel account:
-   ```bash
-   vercel login
-   ```
-
-3. Navigate to your project directory and deploy:
-   ```bash
-   cd /path/to/your/project
-   vercel
-   ```
-
-4. Follow the prompts to configure your project:
-   - Set up and deploy? Yes
-   - Which scope? Select your account
-   - Link to existing project? No (unless you've already created one)
-   - What's your project name? (Choose a name)
-   - In which directory is your code located? ./ (or your specific directory)
-   - Want to override settings? Yes
-   - Which settings would you like to override? Environment Variables (at minimum)
-
-5. Add your environment variables when prompted:
-   - OPENAI_API_KEY
-   - EMAIL_USER
-   - EMAIL_PASS
-   - EMAIL_SERVICE (if not using Gmail)
-
-## Step 3: Configure environment variables
-
-During the import process or after deployment, you'll need to set up the following environment variables:
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `OPENAI_API_KEY` | Your OpenAI API key | Yes |
-| `EMAIL_USER` | Your email address | Yes, for email functionality |
-| `EMAIL_PASS` | Your email app password | Yes, for email functionality |
-| `EMAIL_SERVICE` | Email service (default: gmail) | No |
-
-For Gmail accounts, you need to use an App Password rather than your normal password. See [Google's documentation](https://support.google.com/accounts/answer/185833) for more information.
-
-### Adding environment variables via the Dashboard
-
-1. Go to your project in the Vercel dashboard
-2. Click on "Settings" tab
-3. Click on "Environment Variables" in the left sidebar
-4. Add each environment variable and its value
-5. Make sure to select all deployment environments (Production, Preview, Development)
-6. Click "Save" to apply the changes
-
-### Adding environment variables via the CLI
-
-You can also add environment variables using the Vercel CLI:
+Make sure your repository is ready for deployment:
 
 ```bash
-vercel env add OPENAI_API_KEY
-# Enter the value when prompted
+# Install dependencies
+npm install
 
-vercel env add EMAIL_USER
-# Enter the value when prompted
-
-vercel env add EMAIL_PASS
-# Enter the value when prompted
-
-# If not using Gmail
-vercel env add EMAIL_SERVICE
-# Enter the value when prompted
+# Test that the app works locally
+npm run dev
 ```
 
-After adding all environment variables, redeploy your application:
+### 2. Configure Environment Variables
+
+Create a `.env` file in your project root with the following variables:
+
+```
+OPENAI_API_KEY=your_openai_api_key
+```
+
+You'll need to add these same environment variables in the Vercel dashboard during deployment.
+
+### 3. Deploy to Vercel
+
+#### Option A: Deploy via GitHub Integration (Recommended)
+
+1. Push your code to a GitHub repository
+2. Log in to the [Vercel Dashboard](https://vercel.com/dashboard)
+3. Click "Add New..." > "Project"
+4. Select your GitHub repository
+5. Configure project settings:
+   - Set the framework preset to "Vite"
+   - Add your environment variables from step 2
+   - Under "Build and Output Settings," ensure:
+     - Build Command: `npm run build`
+     - Output Directory: `dist`
+6. Click "Deploy"
+
+#### Option B: Deploy via Vercel CLI
 
 ```bash
-vercel --prod
+# Install Vercel CLI if you haven't already
+npm i -g vercel
+
+# Deploy to Vercel
+vercel
+
+# Follow the prompts to configure your project
 ```
 
-## Step 4: Deploy
+## Memory Management for Vercel Hobby Plan
 
-1. Click "Deploy" to start the deployment process
-2. Vercel will automatically build and deploy your application
-3. Once deployed, Vercel will provide you with a URL for your application
+The Vercel Hobby plan has a memory limit of 1024MB. The StarWeb application has been optimized to work within these constraints by:
 
-## Step 5: Testing your deployment
+1. Using lightweight browser configurations in `api/utils/browser.js`
+2. Implementing a specialized analysis endpoint for memory-constrained environments
+3. Using optimized models (gpt-3.5-turbo instead of gpt-4o)
 
-1. Visit the URL provided by Vercel
-2. Test the application by analyzing a website
-3. Check the email functionality by sharing a report
-4. Test the AI solution generator
+### Plan Limits
+
+| Plan | Memory Limit | Function Duration |
+|------|--------------|-------------------|
+| Hobby | 1024 MB | 10s (Edge), 60s (Serverless) |
+| Pro | 3008 MB | 900s |
+| Enterprise | 4096 MB | 900s |
 
 ## Troubleshooting
 
-### Error: The serverless function has crashed
+### Browser Launch Issues
 
-This error might occur if:
-- Your serverless function exceeds the memory limit
-- Puppeteer is not properly configured
+If you encounter browser launch issues, check the health endpoint to diagnose problems:
 
-**Solution**:
-- Check the Vercel build logs
-- Ensure Puppeteer is properly configured for serverless environments
-- Consider using `chrome-aws-lambda` instead of regular Puppeteer
-- Increase the memory limit in vercel.json (we've set it to 3008MB)
-
-### Error: Environment variables not accessible
-
-**Solution**:
-- Verify that you've properly set the environment variables in the Vercel dashboard
-- Ensure the variables are set on the production environment (not just preview)
-- Redeploy after setting environment variables with `vercel --prod`
-
-### Error: Email functionality not working
-
-**Solution**:
-- Verify your email credentials
-- For Gmail, ensure you're using an App Password
-- Check the logs in the Vercel dashboard
-
-### Error: Puppeteer failing to launch in Vercel
-
-**Solution**:
-- Make sure you're using the correct versions of chrome-aws-lambda (^6.0.0) and puppeteer-core (^6.0.0)
-- Verify that the chromium.js utility file is correctly set up
-- Check if you need to increase the memory limit in vercel.json
-
-## Updating your deployment
-
-When you push changes to your GitHub repository, Vercel will automatically rebuild and redeploy your application. You can also force a deployment using the CLI:
-
-```bash
-vercel --prod
+```
+https://your-vercel-deployment.vercel.app/api/health
 ```
 
-## Conclusion
+Common browser-related issues:
 
-Your StarWeb application should now be successfully deployed to Vercel and accessible via the provided URL. If you encounter any issues or have questions, refer to the [Vercel documentation](https://vercel.com/docs) or open an issue in the GitHub repository. 
+1. **Chrome Executable Not Found**: The deployment is attempting to find a Chrome executable. This has been addressed in the `browser.js` utility which tries multiple paths.
+
+2. **Memory Limitations**: If the browser fails to launch due to memory constraints, consider:
+   - Using the lightweight analyze endpoint
+   - Upgrading to the Vercel Pro plan
+
+### Environment Variables
+
+If the health check indicates missing environment variables:
+
+1. Log in to the Vercel Dashboard
+2. Select your project
+3. Go to "Settings" > "Environment Variables"
+4. Add or update the required variables
+
+### Function Execution Timeouts
+
+If analysis is timing out:
+
+1. Check the function logs in Vercel Dashboard
+2. Consider using the lightweight analysis endpoint
+3. If necessary, upgrade to Vercel Pro for longer execution times
+
+## Monitoring
+
+Monitor your deployment using:
+
+1. **Vercel Analytics**: Enable in the Vercel Dashboard
+2. **Custom Health Checks**: The `/api/health` endpoint provides detailed status information
+3. **Vercel Logs**: Check function execution logs for errors
+
+## Upgrading
+
+If you need more resources, consider:
+
+1. **Upgrading to Vercel Pro**: Increases memory limit to 3008MB
+2. **Using Edge Functions**: For certain endpoints that can benefit from the Edge network
+3. **Optimizing Local Analysis**: Use the app locally for intensive analysis tasks 
