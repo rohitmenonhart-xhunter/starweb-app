@@ -5,7 +5,7 @@
   "framework": "vite",
   "functions": {
     "api/*.js": {
-      "memory": 3008,
+      "memory": 1024,
       "maxDuration": 60
     }
   },

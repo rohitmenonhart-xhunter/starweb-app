@@ -21,26 +21,50 @@ const getExecutablePath = async () => {
   return await chrome.executablePath;
 };
 
-// Function to launch a browser instance
+// Memory-optimized options for Vercel Hobby plan (1024MB limit)
+const getLowMemoryOptions = (executablePath) => ({
+  args: [
+    ...chrome.args,
+    '--hide-scrollbars',
+    '--disable-web-security',
+    '--disable-dev-shm-usage', // This is important for low memory environments
+    '--disable-features=site-per-process',
+    '--disable-extensions',
+    '--no-zygote',
+    '--single-process', // Important to save memory
+    '--disable-accelerated-2d-canvas',
+    '--disable-gpu'
+  ],
+  defaultViewport: {
+    width: 1280,
+    height: 720,
+    deviceScaleFactor: 1,
+  },
+  executablePath,
+  headless: true,
+  ignoreHTTPSErrors: true,
+});
+
+// Function to launch a browser instance (memory-optimized)
 export async function getChromiumBrowser() {
   const executablePath = await getExecutablePath();
   
-  const options = {
-    args: [...chrome.args, '--hide-scrollbars', '--disable-web-security'],
-    defaultViewport: chrome.defaultViewport,
-    executablePath,
-    headless: true,
-    ignoreHTTPSErrors: true,
-  };
-  
   try {
-    return await puppeteer.launch(options);
+    return await puppeteer.launch(getLowMemoryOptions(executablePath));
   } catch (error) {
     console.error('Error launching Chromium:', error);
     
-    // Fallback options for Vercel
+    // Fallback options with even more memory optimization
     const fallbackOptions = {
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process'
+      ],
       headless: true,
       ignoreHTTPSErrors: true,
     };
@@ -52,8 +76,18 @@ export async function getChromiumBrowser() {
 // Export the function to get a new page from the browser
 export async function getChromiumPage() {
   const browser = await getChromiumBrowser();
-  return {
-    browser,
-    page: await browser.newPage(),
-  };
+  const page = await browser.newPage();
+  
+  // Configure page for lower memory usage
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    // Block unnecessary resources to save memory
+    if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
+      request.abort();
+    } else {
+      request.continue();
+    }
+  });
+  
+  return { browser, page };
 } 
