@@ -2,6 +2,7 @@ import chromium from 'chrome-aws-lambda';
 import fs from 'fs';
 import path from 'path';
 import { getLibraryPaths } from './lambda-setup.js';
+import { downloadChromeFromS3, isChromiumAccessible } from './s3-chrome-downloader.js';
 
 /**
  * Ensures that the Chrome browser is installed and available
@@ -64,12 +65,26 @@ export async function ensureBrowser() {
             console.warn('Could not set directory permissions:', error.message);
           }
           
-          return executablePath;
+          // Verify Chrome is accessible
+          if (await isChromiumAccessible(executablePath)) {
+            console.log('Chrome is accessible and ready to use');
+            return executablePath;
+          } else {
+            console.warn('Chrome exists but is not accessible. Will try alternative methods.');
+          }
         } else {
           console.warn('Chrome executable not found at path:', executablePath);
         }
       } else {
         console.warn('No Chrome executable path provided by chrome-aws-lambda');
+      }
+      
+      // Try to download Chrome from S3 as a fallback
+      console.log('Attempting to download Chrome from S3...');
+      const s3ChromePath = await downloadChromeFromS3();
+      if (s3ChromePath && await isChromiumAccessible(s3ChromePath)) {
+        console.log('Successfully downloaded and installed Chrome from S3');
+        return s3ChromePath;
       }
       
       // If we get here, we need to try alternative approaches
