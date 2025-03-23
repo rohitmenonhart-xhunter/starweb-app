@@ -5,9 +5,18 @@
  * and provides helpful information for debugging browser issues.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+// Setup dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Create a require function
+const require = createRequire(import.meta.url);
 
 // ANSI colors for better output
 const colors = {
