@@ -4,8 +4,9 @@
 
 // Define possible API endpoints for AI solutions
 const API_ENDPOINTS = [
-  'http://localhost:3001/api/generate-solution',
-  'http://localhost:3002/api/generate-solution'
+  'http://localhost:3001/api/analysis?endpoint=generate-solution',
+  'http://localhost:3002/api/analysis?endpoint=generate-solution',
+  '/api/analysis?endpoint=generate-solution' // Relative path for production
 ];
 
 /**
@@ -15,11 +16,19 @@ const API_ENDPOINTS = [
  */
 async function fetchFromMultipleEndpoints(issue: string): Promise<Response> {
   let lastError: Error | null = null;
+  const endpointAttempts: Array<{endpoint: string, status: string, error?: string}> = [];
+  
+  // Start timing the operation
+  const startTime = performance.now();
   
   // Try each endpoint in sequence
   for (const endpoint of API_ENDPOINTS) {
     try {
       console.log(`Attempting to connect to endpoint: ${endpoint}`);
+      
+      // Use a longer timeout for production endpoint
+      const isProductionEndpoint = !endpoint.includes('localhost');
+      const timeoutMs = isProductionEndpoint ? 10000 : 3000;
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -27,23 +36,60 @@ async function fetchFromMultipleEndpoints(issue: string): Promise<Response> {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ issue }),
-        // Short timeout to quickly move to the next endpoint if this one fails
-        signal: AbortSignal.timeout(3000)
+        // Longer timeout for production endpoint
+        signal: AbortSignal.timeout(timeoutMs)
       });
+      
+      // Create attempt record for this endpoint
+      const endpointAttempt: {endpoint: string, status: string, error?: string} = {
+        endpoint,
+        status: `${response.status} ${response.statusText}`
+      };
       
       if (response.ok) {
         console.log(`Successfully connected to endpoint: ${endpoint}`);
+        endpointAttempt.status = 'success';
+        endpointAttempts.push(endpointAttempt);
+        
+        // Log timing information
+        const endTime = performance.now();
+        console.log(`Solution generated in ${Math.round(endTime - startTime)}ms`);
+        
         return response;
       } else {
         console.warn(`Endpoint returned non-OK status: ${endpoint}`, response.status, response.statusText);
+        
+        // Try to get more detailed error information from the response
+        try {
+          const errorData = await response.json();
+          endpointAttempt.error = JSON.stringify(errorData);
+        } catch {
+          endpointAttempt.error = `Server returned ${response.status}: ${response.statusText}`;
+        }
+        
+        endpointAttempts.push(endpointAttempt);
         lastError = new Error(`Server returned ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
       console.warn(`Failed to connect to endpoint: ${endpoint}`, error);
+      
+      endpointAttempts.push({
+        endpoint,
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
       lastError = error instanceof Error ? error : new Error(String(error));
       // Continue to the next endpoint
     }
   }
+  
+  // Log detailed diagnostic information about all attempts
+  console.error('All solution generation endpoints failed:', {
+    issue: issue.substring(0, 100) + (issue.length > 100 ? '...' : ''),
+    attempts: endpointAttempts,
+    timeTaken: Math.round(performance.now() - startTime)
+  });
   
   // If we've tried all endpoints and none worked, throw the last error
   throw lastError || new Error('All API endpoints failed');
@@ -55,15 +101,24 @@ async function fetchFromMultipleEndpoints(issue: string): Promise<Response> {
  * @returns A promise that resolves to the personalized solution
  */
 export async function generatePersonalizedSolution(issue: string): Promise<string> {
+  console.log(`Generating solution for issue: "${issue.substring(0, 50)}${issue.length > 50 ? '...' : ''}"`);
+  
   try {
     const response = await fetchFromMultipleEndpoints(issue);
     const data = await response.json();
+    
+    if (!data.solution) {
+      console.error('API returned success but no solution:', data);
+      throw new Error('Server returned an empty solution');
+    }
+    
     return data.solution;
   } catch (error) {
     console.error('Error generating personalized solution:', error);
     
     // Try to generate a solution directly in the browser as a last resort
     try {
+      console.log('Falling back to local solution generation');
       return generateLocalSolution(issue);
     } catch (localError) {
       console.error('Local solution generation also failed:', localError);

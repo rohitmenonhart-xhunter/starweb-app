@@ -22,10 +22,10 @@ export const sendAnalysisEmail = async (analysis, email) => {
     // In production, use a relative URL
     const serverUrl = isLocalhost ? `http://${window.location.hostname}:3001` : '';
     
-    // Send the email via the server
-    console.log('Sending POST request to', `${serverUrl}/api/send-email`);
+    // Try sending using the new combined endpoint first
+    console.log('Trying combined endpoint first:', `${serverUrl}/api/email?endpoint=send-email`);
     try {
-      const response = await axios.post(`${serverUrl}/api/send-email`, {
+      const response = await axios.post(`${serverUrl}/api/email?endpoint=send-email`, {
         to: email,
         subject: `StarWeb Analysis Report - ${analysis.mainPage.title}`,
         html: htmlReport,
@@ -33,48 +33,83 @@ export const sendAnalysisEmail = async (analysis, email) => {
         siteUrl: analysis.mainPage.url
       });
       
-      console.log('Email API response:', response.data);
+      console.log('Email API response (combined endpoint):', response.data);
       return response.data;
-    } catch (axiosError) {
-      console.error('Axios error details:', {
-        message: axiosError.message,
-        response: axiosError.response ? {
-          status: axiosError.response.status,
-          data: axiosError.response.data
-        } : 'No response',
-        request: axiosError.request ? 'Request exists' : 'No request'
-      });
+    } catch (combinedEndpointError) {
+      console.error('Combined endpoint error, trying original endpoint:', combinedEndpointError);
       
-      // If we're in development and the first attempt failed, try the other port
-      if (isLocalhost && axiosError.message && axiosError.message.includes('Network Error')) {
-        try {
-          console.log('Retrying with port 3002');
-          const alternateServerUrl = `http://${window.location.hostname}:3002`;
-          
-          const response = await axios.post(`${alternateServerUrl}/api/send-email`, {
-            to: email,
-            subject: `StarWeb Analysis Report - ${analysis.mainPage.title}`,
-            html: htmlReport,
-            siteName: analysis.mainPage.title,
-            siteUrl: analysis.mainPage.url
-          });
-          
-          console.log('Email API response (second attempt):', response.data);
-          return response.data;
-        } catch (retryError) {
-          console.error('Error on retry details:', {
-            message: retryError.message,
-            response: retryError.response ? {
-              status: retryError.response.status,
-              data: retryError.response.data
-            } : 'No response',
-            request: retryError.request ? 'Request exists' : 'No request'
-          });
-          throw new Error(retryError.message || 'Failed to send analysis email');
+      // If the combined endpoint fails, try the original endpoint
+      try {
+        // Send the email via the original server endpoint
+        console.log('Trying original endpoint:', `${serverUrl}/api/send-email`);
+        const response = await axios.post(`${serverUrl}/api/send-email`, {
+          to: email,
+          subject: `StarWeb Analysis Report - ${analysis.mainPage.title}`,
+          html: htmlReport,
+          siteName: analysis.mainPage.title,
+          siteUrl: analysis.mainPage.url
+        });
+        
+        console.log('Email API response (original endpoint):', response.data);
+        return response.data;
+      } catch (originalEndpointError) {
+        console.error('Original endpoint error details:', {
+          message: originalEndpointError.message,
+          response: originalEndpointError.response ? {
+            status: originalEndpointError.response.status,
+            data: originalEndpointError.response.data
+          } : 'No response',
+          request: originalEndpointError.request ? 'Request exists' : 'No request'
+        });
+        
+        // If we're in development and both attempts failed, try the alternative port
+        if (isLocalhost && originalEndpointError.message && originalEndpointError.message.includes('Network Error')) {
+          try {
+            console.log('Retrying with port 3002');
+            const alternateServerUrl = `http://${window.location.hostname}:3002`;
+            
+            // Try the combined endpoint on the alternate port
+            try {
+              const response = await axios.post(`${alternateServerUrl}/api/email?endpoint=send-email`, {
+                to: email,
+                subject: `StarWeb Analysis Report - ${analysis.mainPage.title}`,
+                html: htmlReport,
+                siteName: analysis.mainPage.title,
+                siteUrl: analysis.mainPage.url
+              });
+              
+              console.log('Email API response (alternate port, combined endpoint):', response.data);
+              return response.data;
+            } catch (altCombinedError) {
+              console.error('Alternate port combined endpoint error, trying original endpoint:', altCombinedError);
+              
+              // Try the original endpoint on the alternate port
+              const response = await axios.post(`${alternateServerUrl}/api/send-email`, {
+                to: email,
+                subject: `StarWeb Analysis Report - ${analysis.mainPage.title}`,
+                html: htmlReport,
+                siteName: analysis.mainPage.title,
+                siteUrl: analysis.mainPage.url
+              });
+              
+              console.log('Email API response (alternate port, original endpoint):', response.data);
+              return response.data;
+            }
+          } catch (retryError) {
+            console.error('Error on retry details:', {
+              message: retryError.message,
+              response: retryError.response ? {
+                status: retryError.response.status,
+                data: retryError.response.data
+              } : 'No response',
+              request: retryError.request ? 'Request exists' : 'No request'
+            });
+            throw new Error(retryError.message || 'Failed to send analysis email');
+          }
         }
+        
+        throw originalEndpointError;
       }
-      
-      throw axiosError;
     }
   } catch (error) {
     console.error('Error sending analysis email:', error);
@@ -411,4 +446,68 @@ const generateHtmlReport = (analysis) => {
     </body>
     </html>
   `;
-}; 
+};
+
+/**
+ * Sends the analysis report via email
+ * @param {string} to Email address to send the report to
+ * @param {string} subject Email subject
+ * @param {string} html Email HTML content
+ * @param {string} siteName Name of the analyzed site
+ * @param {string} siteUrl URL of the analyzed site
+ * @returns {Promise<object>} Response from the email API
+ */
+export async function sendEmail(to, subject, html, siteName, siteUrl) {
+  try {
+    // Try the default server URL first
+    const serverUrl = getServerUrl();
+    
+    console.log('Sending POST request to', `${serverUrl}/api/email?endpoint=send-email`);
+    
+    // Try sending with the primary URL
+    try {
+      const response = await axios.post(`${serverUrl}/api/email?endpoint=send-email`, {
+        to,
+        subject,
+        html,
+        siteName,
+        siteUrl
+      });
+      
+      console.log('Email API response:', response.data);
+      
+      return {
+        success: true,
+        message: response.data.message || 'Email sent successfully'
+      };
+    } catch (primaryError) {
+      console.error('Error with primary server, trying fallback:', primaryError);
+      
+      // If the primary URL fails, try the alternate URL
+      const alternateServerUrl = getAlternateServerUrl();
+      
+      // Try sending with the alternate URL
+      const response = await axios.post(`${alternateServerUrl}/api/email?endpoint=send-email`, {
+        to,
+        subject,
+        html,
+        siteName,
+        siteUrl
+      });
+      
+      return {
+        success: true,
+        message: response.data.message || 'Email sent successfully (via fallback)'
+      };
+    }
+  } catch (error) {
+    console.error('Email sending error:', error);
+    
+    // Return a friendly error message
+    return {
+      success: false,
+      message: 'Failed to send email. Please try again later.',
+      error: error.message
+    };
+  }
+} 

@@ -159,6 +159,71 @@ type FullAnalysis = {
   allLinks: string[];
 };
 
+/**
+ * Generates HTML for email content
+ * @param analysis The analysis data
+ * @param currentSolution Optional current solution to include
+ * @returns HTML string for email
+ */
+const generateEmailHTML = (analysis: FullAnalysis, currentSolution?: string): string => {
+  // Simple HTML template for email
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #4B0082; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .section { margin-bottom: 20px; }
+        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+        h2 { color: #4B0082; }
+        .stat { margin-bottom: 10px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>StarWeb Analysis Report</h1>
+          <h2>${analysis.mainPage.title || analysis.mainPage.url}</h2>
+        </div>
+        <div class="content">
+          <div class="section">
+            <h2>Website Overview</h2>
+            <div class="stat"><strong>URL:</strong> ${analysis.mainPage.url}</div>
+            <div class="stat"><strong>Title:</strong> ${analysis.mainPage.title}</div>
+            ${analysis.mainPage.content.metadata?.description ? 
+              `<div class="stat"><strong>Description:</strong> ${analysis.mainPage.content.metadata.description}</div>` : ''}
+          </div>
+          
+          <div class="section">
+            <h2>Key Findings</h2>
+            <ul>
+              ${analysis.mainPage.analysis.visual.exitPoints.map(point => `<li>${point}</li>`).join('')}
+              ${analysis.mainPage.analysis.assets.performanceIssues.map(issue => `<li>${issue}</li>`).join('')}
+              ${analysis.mainPage.analysis.content.structureIssues.map(issue => `<li>${issue}</li>`).join('')}
+            </ul>
+          </div>
+          
+          ${currentSolution ? `
+          <div class="section">
+            <h2>Recommended Solution</h2>
+            <p>${currentSolution}</p>
+          </div>
+          ` : ''}
+          
+          <p>For the full interactive report, please visit <a href="https://starweb.app">StarWeb</a></p>
+        </div>
+        <div class="footer">
+          <p>StarWeb - Website Analysis Tool</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
 function App() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -225,7 +290,54 @@ function App() {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/analyze', {
+      // First try the main endpoint (for backward compatibility)
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Debug the data
+          console.log('Analysis data received:', data);
+          console.log('Visual analysis:', data.mainPage.analysis.visual);
+          console.log('Exit Points:', data.mainPage.analysis.visual.exitPoints);
+          console.log('Design Issues:', data.mainPage.analysis.visual.designIssues);
+          
+          // Initialize userNeeds arrays for each section
+          if (data && data.mainPage && data.mainPage.analysis) {
+            if (data.mainPage.analysis.visual && !data.mainPage.analysis.visual.userNeeds) {
+              data.mainPage.analysis.visual.userNeeds = [];
+            }
+            
+            if (data.mainPage.analysis.assets && !data.mainPage.analysis.assets.userNeeds) {
+              data.mainPage.analysis.assets.userNeeds = [];
+            }
+            
+            if (data.mainPage.analysis.content && !data.mainPage.analysis.content.userNeeds) {
+              data.mainPage.analysis.content.userNeeds = [];
+            }
+          }
+          
+          setAnalysis(data);
+          setActiveTab('main');
+          setAnalysisComplete(true);
+          setShowInputSection(false);
+          toast.success('Analysis completed successfully!');
+          setLoading(false);
+          return;
+        }
+      } catch (primaryError) {
+        console.error('Primary endpoint failed, trying fallback:', primaryError);
+      }
+      
+      // If primary endpoint fails, try the fallback combined endpoint
+      const fallbackResponse = await fetch('/api/analysis?endpoint=analyze-lightweight', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -233,56 +345,39 @@ function App() {
         body: JSON.stringify({ url }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
+      if (!fallbackResponse.ok) {
+        const error = await fallbackResponse.json();
         throw new Error(error.error || 'Analysis failed');
       }
       
-      const data = await response.json();
+      const data = await fallbackResponse.json();
       
       // Debug the data
-      console.log('Analysis data received:', data);
+      console.log('Analysis data received from fallback:', data);
       console.log('Visual analysis:', data.mainPage.analysis.visual);
       console.log('Exit Points:', data.mainPage.analysis.visual.exitPoints);
       console.log('Design Issues:', data.mainPage.analysis.visual.designIssues);
       
       // Initialize userNeeds arrays for each section
       if (data && data.mainPage && data.mainPage.analysis) {
-        // Initialize userNeeds arrays if they don't exist
-        if (!data.mainPage.analysis.visual.userNeeds) {
+        if (data.mainPage.analysis.visual && !data.mainPage.analysis.visual.userNeeds) {
           data.mainPage.analysis.visual.userNeeds = [];
         }
-        if (!data.mainPage.analysis.assets.userNeeds) {
+        
+        if (data.mainPage.analysis.assets && !data.mainPage.analysis.assets.userNeeds) {
           data.mainPage.analysis.assets.userNeeds = [];
         }
-        if (!data.mainPage.analysis.content.userNeeds) {
-          data.mainPage.analysis.content.userNeeds = [];
-        }
         
-        // Do the same for additional pages if they exist
-        if (data.additionalPages && data.additionalPages.length > 0) {
-          data.additionalPages.forEach((page: PageAnalysis) => {
-            if (!page.analysis.visual.userNeeds) {
-              page.analysis.visual.userNeeds = [];
-            }
-            if (!page.analysis.assets.userNeeds) {
-              page.analysis.assets.userNeeds = [];
-            }
-            if (!page.analysis.content.userNeeds) {
-              page.analysis.content.userNeeds = [];
-            }
-          });
+        if (data.mainPage.analysis.content && !data.mainPage.analysis.content.userNeeds) {
+          data.mainPage.analysis.content.userNeeds = [];
         }
       }
       
       setAnalysis(data);
-      setActiveTab('main');
       setAnalysisComplete(true);
-      setShowInputSection(false);
-      toast.success('Analysis completed successfully!');
     } catch (error) {
+      console.error('Analysis error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to analyze website');
-      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -1799,34 +1894,71 @@ function App() {
   };
 
   const handleSendEmail = async () => {
-    console.log('handleSendEmail called');
-    
     if (!analysis) {
-      console.error('Analysis data not available');
-      toast.error('Analysis data not available');
+      toast.error("No analysis data available to send");
       return;
     }
-
-    // Validate email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailAddress)) {
-      console.error('Invalid email address:', emailAddress);
-      toast.error('Please enter a valid email address');
-      return;
-    }
-
-    console.log('Sending email to:', emailAddress);
+    
     setIsSendingEmail(true);
+
     try {
-      console.log('Calling sendAnalysisEmail');
-      const response = await sendAnalysisEmail(analysis, emailAddress);
-      console.log('Email sent successfully:', response);
-      toast.success(`Analysis report sent to ${emailAddress}`);
-      setShowEmailModal(false);
-      setEmailAddress('');
+      // Generate email HTML content
+      const content = generateEmailHTML(analysis, currentSolution); 
+      
+      // Try the combined endpoint first
+      try {
+        const response = await fetch('/api/email?endpoint=send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: emailAddress,
+            subject: `Website Analysis for ${analysis.mainPage.title || analysis.mainPage.url}`,
+            html: content,
+            siteName: analysis.mainPage.title || 'Analyzed Website',
+            siteUrl: analysis.mainPage.url
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          toast.success(data.message || "Email sent successfully!");
+          setShowEmailModal(false);
+        } else {
+          throw new Error(data.message || "Failed to send email");
+        }
+      } catch (combinedEndpointError) {
+        console.error("Combined endpoint error:", combinedEndpointError);
+        
+        // Fallback to original endpoint
+        const response = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: emailAddress,
+            subject: `Website Analysis for ${analysis.mainPage.title || analysis.mainPage.url}`,
+            html: content,
+            siteName: analysis.mainPage.title || 'Analyzed Website',
+            siteUrl: analysis.mainPage.url
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          toast.success(data.message || "Email sent successfully!");
+          setShowEmailModal(false);
+        } else {
+          throw new Error(data.message || "Failed to send email");
+        }
+      }
     } catch (error) {
-      console.error('Error sending email:', error);
-      toast.error('Failed to send email');
+      console.error("Error sending email:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to send email");
     } finally {
       setIsSendingEmail(false);
     }
