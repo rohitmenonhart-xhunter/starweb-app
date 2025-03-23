@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="#030014"/>
+  
+  <!-- Star glow effect -->
+  <circle cx="256" cy="256" r="180" fill="url(#starGlow)" filter="url(#blur)"/>
+  
+  <!-- Main star -->
+  <path d="M256 76L297.3 201.3L428.5 201.3L322.6 280.4L363.9 405.7L256 326.6L148.1 405.7L189.4 280.4L83.5 201.3L214.7 201.3L256 76Z" fill="url(#starGradient)"/>
+  
+  <!-- Small stars -->
+  <circle cx="128" cy="128" r="4" fill="white" opacity="0.6"/>
+  <circle cx="384" cy="384" r="4" fill="white" opacity="0.6"/>
+  <circle cx="384" cy="128" r="4" fill="white" opacity="0.6"/>
+  <circle cx="128" cy="384" r="4" fill="white" opacity="0.6"/>
+  
+  <!-- Definitions -->
+  <defs>
+    <radialGradient id="starGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 256) rotate(90) scale(180)">
+      <stop offset="0%" stop-color="#9E00FF" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#030014" stop-opacity="0"/>
+    </radialGradient>
+    
+    <linearGradient id="starGradient" x1="256" y1="76" x2="256" y2="405.7" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9E00FF"/>
+      <stop offset="50%" stop-color="#800080"/>
+      <stop offset="100%" stop-color="#4B0082"/>
+    </linearGradient>
+    
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="20"/>
+    </filter>
+  </defs>
+</svg> 

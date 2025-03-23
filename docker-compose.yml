@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: starweb-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"  # Backend API
+    volumes:
+      - ./.env:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Add proper resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    # Add proper security options
+    security_opt:
+      - no-new-privileges:true
+    # Add proper capabilities for Chrome
+    cap_add:
+      - SYS_ADMIN
+    # Add proper shm size for Chrome
+    shm_size: 1gb 
